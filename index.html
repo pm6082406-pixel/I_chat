@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,7 +12,7 @@
         header { background: var(--primary); color: white; padding: 15px; text-align: center; font-size: 22px; font-weight: bold; }
 
         .connection-panel { background: white; padding: 15px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; border-bottom: 2px solid #ddd; }
-        .id-box { padding: 8px; background: #e3f2fd; border-radius: 5px; border: 1px dashed var(--primary); font-weight: bold; }
+        .id-box { padding: 8px; background: #e3f2fd; border-radius: 5px; border: 1px dashed var(--primary); font-weight: bold; color: #000; }
 
         .main-layout { display: flex; flex: 1; overflow: hidden; padding: 10px; gap: 10px; }
         
@@ -26,23 +26,35 @@
         video { width: 90%; border-radius: 8px; background: #000; margin: 5px; }
         .controls { position: absolute; bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: 100%; }
 
+        /* Drawing Canvas Styles */
+        #drawing-canvas {
+            display: none; /* Hidden by default */
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            cursor: crosshair;
+            z-index: 5; /* Sit between video and controls */
+        }
+
         input, button { padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
         button { cursor: pointer; border: none; font-weight: bold; transition: 0.3s; color: white; }
         .btn-call { background: var(--secondary); }
         .btn-copy { background: #6c757d; }
         .btn-screen { background: #6f42c1; }
+        .btn-draw { background: #ffc107; color: #333; } /* Special style for drawing */
         .btn-hangup { background: var(--danger); }
         button:hover { opacity: 0.8; }
     </style>
 </head>
 <body>
 
-<header>I-CHAT: Connect & Share</header>
+<header>I-CHAT: Connect & Share (with Drawing)</header>
 
 <div class="connection-panel">
-    <div>Meri ID: <span id="my-id" class="id-box">Connecting...</span></div>
-    <button class="btn-copy" onclick="copyInviteLink()">🔗 Link Copy Karein</button>
-    <input type="text" id="friend-id" placeholder="Dost ki ID daalein" style="color: black;">
+    <div>My ID: <span id="my-id" class="id-box">Connecting...</span></div>
+    <button class="btn-copy" onclick="copyInviteLink()">🔗 Copy Link</button>
+    <input type="text" id="friend-id" placeholder="Enter Friend's ID" style="color: black;">
     <button class="btn-call" onclick="startCall()">📞 Call / Connect</button>
 </div>
 
@@ -50,8 +62,8 @@
     <section id="chat-area">
         <div id="messages"></div>
         <div style="padding: 10px; display: flex; gap: 5px; border-top: 1px solid #eee;">
-            <input type="text" id="msg-input" placeholder="Message likhein..." style="flex:1">
-            <button onclick="sendMsg()" style="background: var(--primary);">Bhejein</button>
+            <input type="text" id="msg-input" placeholder="Type message..." style="flex:1">
+            <button onclick="sendMsg()" style="background: var(--primary);">Send</button>
         </div>
     </section>
 
@@ -59,10 +71,13 @@
         <video id="remote-video" autoplay playsinline></video>
         <video id="local-video" autoplay muted playsinline style="width: 25%; position: absolute; top: 10px; right: 10px; border: 2px solid white; z-index: 10;"></video>
         
+        <canvas id="drawing-canvas"></canvas>
+
         <div class="controls">
             <button onclick="toggleCamera()" id="cam-btn" style="background: orange;">Camera Off</button>
             <button onclick="startScreenShare()" class="btn-screen">🖥️ Screen Share</button>
-            <button onclick="hangUp()" class="btn-hangup">🛑 Call Cut</button>
+            <button onclick="toggleDrawing()" id="draw-btn" class="btn-draw">✏️ Draw Off</button>
+            <button onclick="hangUp()" class="btn-hangup">🛑 Hang Up</button>
         </div>
     </section>
 </div>
@@ -72,6 +87,11 @@
     const msgInput = document.getElementById('msg-input');
     const messagesDiv = document.getElementById('messages');
     const friendIdInput = document.getElementById('friend-id');
+
+    const canvas = document.getElementById('drawing-canvas');
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let drawingEnabled = false;
 
     let peer = new Peer(); 
     let conn;
@@ -89,7 +109,7 @@
     });
 
     peer.on('call', async (call) => {
-        if(confirm("Dost ki call aa rahi hai, uthayein?")) {
+        if(confirm("Incoming call from a friend. Accept?")) {
             const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
             localStream = stream;
             document.getElementById('local-video').srcObject = stream;
@@ -101,7 +121,7 @@
 
     async function startCall() {
         const friendId = friendIdInput.value;
-        if(!friendId) return alert("Pehle Dost ki ID daalein!");
+        if(!friendId) return alert("Please enter Friend's ID first!");
 
         conn = peer.connect(friendId);
         setupChat();
@@ -160,6 +180,7 @@
         if (currentCall) currentCall.close();
         if (conn) conn.close();
         stopAllVideo();
+        if (drawingEnabled) toggleDrawing(); // Turn off drawing if hanging up
         addMessage("Call disconnected.", "received");
     }
 
@@ -171,10 +192,15 @@
         document.getElementById('remote-video').srcObject = null;
     }
 
-    // --- EXISTING CHAT LOGIC ---
+    // --- EXISTING CHAT LOGIC (Updated to support Drawing data) ---
     function setupChat() {
         conn.on('data', (data) => {
-            addMessage(data, 'received');
+            // Check if data is a special drawing object
+            if (typeof data === 'object' && data.type === 'drawing') {
+                handleIncomingDrawing(data);
+            } else {
+                addMessage(data, 'received');
+            }
         });
         addMessage("Friend connected!", "received");
     }
@@ -200,7 +226,7 @@
         const id = myIdDisplay.innerText;
         const link = window.location.origin + window.location.pathname + "?id=" + id;
         navigator.clipboard.writeText(link);
-        alert("Invite Link Copy Ho Gaya!");
+        alert("Invite Link Copied!");
     }
 
     function checkURLForID() {
@@ -218,6 +244,101 @@
             document.getElementById('cam-btn').innerText = videoTrack.enabled ? "Camera Off" : "Camera On";
         }
     }
+
+    // --- DRAWING CANVAS LOGIC ---
+
+    function toggleDrawing() {
+        if (!currentCall && !conn) return alert("Connect to a friend first to share drawing!");
+        
+        drawingEnabled = !drawingEnabled;
+        const drawBtn = document.getElementById('draw-btn');
+
+        if (drawingEnabled) {
+            drawBtn.innerText = "✏️ Draw On";
+            canvas.style.display = 'block';
+            resizeCanvas(); // Ensure canvas is the right size when shown
+            setupCanvasListeners();
+        } else {
+            drawBtn.innerText = "✏️ Draw Off";
+            canvas.style.display = 'none';
+            // Clear own canvas when turning drawing off
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
+        }
+    }
+
+    function resizeCanvas() {
+        // Set canvas internal resolution to match its displayed size
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        
+        // Setup default drawing style after resize
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+    }
+
+    // Map drawing actions to functions
+    const drawActions = {
+        'down': (x, y) => { isDrawing = true; ctx.beginPath(); ctx.moveTo(x, y); },
+        'move': (x, y) => { if (isDrawing) { ctx.lineTo(x, y); ctx.stroke(); } },
+        'up': () => { isDrawing = false; }
+    };
+
+    function setupCanvasListeners() {
+        // Mouse Events
+        canvas.onmousedown = (e) => handleDrawEvent(e, 'down');
+        canvas.onmousemove = (e) => handleDrawEvent(e, 'move');
+        canvas.onmouseup = (e) => handleDrawEvent(e, 'up');
+        canvas.onmouseout = (e) => handleDrawEvent(e, 'up'); // Stop drawing if mouse leaves
+
+        // Touch Events (Basic support)
+        canvas.ontouchstart = (e) => handleDrawEvent(e.touches[0], 'down', true);
+        canvas.ontouchmove = (e) => { handleDrawEvent(e.touches[0], 'move', true); e.preventDefault(); }; // prevent scrolling
+        canvas.ontouchend = (e) => handleDrawEvent(e, 'up', true);
+    }
+
+    // Core function to handle and send drawing coordinates
+    function handleDrawEvent(e, action, isTouch = false) {
+        if (!drawingEnabled || !conn) return;
+
+        let x, y;
+        if (action !== 'up') {
+            const rect = canvas.getBoundingClientRect();
+            x = (isTouch ? e.clientX : e.clientX) - rect.left;
+            y = (isTouch ? e.clientY : e.clientY) - rect.top;
+        }
+
+        // 1. Perform drawing locally
+        drawActions[action](x, y);
+
+        // 2. Send drawing data to peer
+        conn.send({
+            type: 'drawing',
+            action: action,
+            x: x, // Can be undefined for 'up'
+            y: y  // Can be undefined for 'up'
+        });
+    }
+
+    // Function to draw incoming data received from peer
+    function handleIncomingDrawing(data) {
+        // Ensure canvas is visible when receiving data
+        if (!drawingEnabled) {
+            canvas.style.display = 'block';
+            resizeCanvas(); 
+            // Optional: You could update the button state here, 
+            // but usually receiving draw data shouldn't force turn 'on' local drawing.
+            // But let's show the canvas so the incoming work is visible.
+        }
+        
+        drawActions[data.action](data.x, data.y);
+    }
+
+    // Resize canvas if the window changes size
+    window.addEventListener('resize', () => {
+        if (drawingEnabled) resizeCanvas();
+    });
+
 </script>
 
 </body>
