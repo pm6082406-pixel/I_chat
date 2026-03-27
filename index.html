@@ -3,34 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>I-CHAT Pro | Connect</title>
+    <title>I-CHAT Pro | Real-time Connect</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
-        :root { --primary: #0078ff; --danger: #ff3b30; --success: #28a745; --bg: #f4f7f6; }
+        :root { --primary: #0078ff; --secondary: #28a745; --danger: #dc3545; --bg: #f4f7f6; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        header { background: var(--primary); color: white; padding: 15px; text-align: center; font-size: 22px; font-weight: bold; }
         
+        header { background: var(--primary); color: white; padding: 15px; text-align: center; font-size: 22px; font-weight: bold; }
+
         .connection-panel { background: white; padding: 15px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; border-bottom: 2px solid #ddd; }
-        .id-box { padding: 8px; background: #e3f2fd; border-radius: 5px; border: 1px dashed var(--primary); font-weight: bold; color: var(--primary); }
+        .id-box { padding: 8px; background: #e3f2fd; border-radius: 5px; border: 1px dashed var(--primary); font-weight: bold; }
 
         .main-layout { display: flex; flex: 1; overflow: hidden; padding: 10px; gap: 10px; }
         
         #chat-area { flex: 1; background: white; border-radius: 10px; display: flex; flex-direction: column; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        #messages { flex: 1; padding: 15px; overflow-y: auto; background: #fafafa; display: flex; flex-direction: column; }
-        .msg { margin-bottom: 10px; padding: 8px 12px; border-radius: 15px; max-width: 80%; word-wrap: break-word; }
-        .sent { background: var(--primary); color: white; align-self: flex-end; }
-        .received { background: #eee; color: #333; align-self: flex-start; }
+        #messages { flex: 1; padding: 15px; overflow-y: auto; background: #fafafa; }
+        .msg { margin-bottom: 10px; padding: 8px 12px; border-radius: 15px; max-width: 80%; width: fit-content; }
+        .sent { background: var(--primary); color: white; align-self: flex-end; margin-left: auto; }
+        .received { background: #eee; color: #333; }
 
-        #video-area { flex: 1.5; background: #1a1a1a; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-        video { width: 100%; height: 100%; object-fit: cover; background: #000; }
-        #local-video { width: 25%; height: auto; position: absolute; top: 10px; right: 10px; border: 2px solid white; border-radius: 8px; z-index: 10; }
+        #video-area { flex: 1; background: #222; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+        video { width: 90%; border-radius: 8px; background: #000; margin: 5px; }
+        .controls { position: absolute; bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: 100%; }
 
-        .controls { position: absolute; bottom: 20px; display: flex; gap: 10px; z-index: 20; }
-        button { padding: 10px 15px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: 0.3s; }
-        .btn-call { background: var(--success); color: white; }
-        .btn-copy { background: #6c757d; color: white; }
-        .btn-screen { background: #5856d6; color: white; }
-        .btn-cut { background: var(--danger); color: white; display: none; }
+        input, button { padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
+        button { cursor: pointer; border: none; font-weight: bold; transition: 0.3s; color: white; }
+        .btn-call { background: var(--secondary); }
+        .btn-copy { background: #6c757d; }
+        .btn-screen { background: #6f42c1; }
+        .btn-hangup { background: var(--danger); }
+        button:hover { opacity: 0.8; }
     </style>
 </head>
 <body>
@@ -39,115 +41,142 @@
 
 <div class="connection-panel">
     <div>Meri ID: <span id="my-id" class="id-box">Connecting...</span></div>
-    <button class="btn-copy" onclick="copyInviteLink()">🔗 Link Copy</button>
-    <input type="text" id="friend-id" placeholder="Dost ki ID daalein" style="padding: 8px; border-radius: 5px; border: 1px solid #ddd;">
-    <button class="btn-call" id="start-btn" onclick="startCall()">📞 Call / Connect</button>
+    <button class="btn-copy" onclick="copyInviteLink()">🔗 Link Copy Karein</button>
+    <input type="text" id="friend-id" placeholder="Dost ki ID daalein" style="color: black;">
+    <button class="btn-call" onclick="startCall()">📞 Call / Connect</button>
 </div>
 
 <div class="main-layout">
     <section id="chat-area">
         <div id="messages"></div>
         <div style="padding: 10px; display: flex; gap: 5px; border-top: 1px solid #eee;">
-            <input type="text" id="msg-input" placeholder="Message..." style="flex:1; padding: 10px;">
-            <button onclick="sendMsg()" style="background: var(--primary); color:white;">Bhejein</button>
+            <input type="text" id="msg-input" placeholder="Message likhein..." style="flex:1">
+            <button onclick="sendMsg()" style="background: var(--primary);">Bhejein</button>
         </div>
     </section>
 
     <section id="video-area">
         <video id="remote-video" autoplay playsinline></video>
-        <video id="local-video" autoplay muted playsinline></video>
+        <video id="local-video" autoplay muted playsinline style="width: 25%; position: absolute; top: 10px; right: 10px; border: 2px solid white; z-index: 10;"></video>
+        
         <div class="controls">
-            <button class="btn-screen" onclick="shareScreen()">🖥️ Screen Share</button>
-            <button class="btn-cut" id="cut-btn" onclick="endCall()">🛑 End Call</button>
+            <button onclick="toggleCamera()" id="cam-btn" style="background: orange;">Camera Off</button>
+            <button onclick="startScreenShare()" class="btn-screen">🖥️ Screen Share</button>
+            <button onclick="hangUp()" class="btn-hangup">🛑 Call Cut</button>
         </div>
     </section>
 </div>
 
 <script>
     const myIdDisplay = document.getElementById('my-id');
-    const friendIdInput = document.getElementById('friend-id');
-    const messagesDiv = document.getElementById('messages');
     const msgInput = document.getElementById('msg-input');
-    const cutBtn = document.getElementById('cut-btn');
+    const messagesDiv = document.getElementById('messages');
+    const friendIdInput = document.getElementById('friend-id');
 
-    let peer = new Peer();
+    let peer = new Peer(); 
     let conn;
-    let currentCall;
     let localStream;
+    let currentCall;
 
-    peer.on('open', id => { myIdDisplay.innerText = id; checkURLForID(); });
+    peer.on('open', (id) => {
+        myIdDisplay.innerText = id;
+        checkURLForID();
+    });
 
-    // Incoming Chat
-    peer.on('connection', c => {
+    peer.on('connection', (c) => {
         conn = c;
         setupChat();
     });
 
-    // Incoming Call
     peer.on('call', async (call) => {
         if(confirm("Dost ki call aa rahi hai, uthayein?")) {
             const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
-            handleCall(call, stream);
+            localStream = stream;
+            document.getElementById('local-video').srcObject = stream;
+            call.answer(stream);
+            currentCall = call;
+            handleCallEvents(call);
         }
     });
 
     async function startCall() {
         const friendId = friendIdInput.value;
-        if(!friendId) return alert("ID daalein!");
-        
+        if(!friendId) return alert("Pehle Dost ki ID daalein!");
+
         conn = peer.connect(friendId);
         setupChat();
 
         const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
-        const call = peer.call(friendId, stream);
-        handleCall(call, stream);
-    }
-
-    function handleCall(call, stream) {
-        currentCall = call;
         localStream = stream;
         document.getElementById('local-video').srcObject = stream;
-        cutBtn.style.display = "block";
+        
+        const call = peer.call(friendId, stream);
+        currentCall = call;
+        handleCallEvents(call);
+    }
 
-        call.answer(stream);
-        call.on('stream', remoteStream => {
+    function handleCallEvents(call) {
+        call.on('stream', (remoteStream) => {
             document.getElementById('remote-video').srcObject = remoteStream;
         });
-        
-        call.on('close', () => endCall());
+        call.on('close', () => {
+            stopAllVideo();
+        });
     }
 
-    async function shareScreen() {
+    // --- SCREEN SHARE OPTION ---
+    async function startScreenShare() {
         try {
             const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            let videoTrack = screenStream.getVideoTracks()[0];
+
             if (currentCall) {
-                let videoTrack = screenStream.getVideoTracks()[0];
                 let sender = currentCall.peerConnection.getSenders().find(s => s.track.kind === 'video');
                 sender.replaceTrack(videoTrack);
-                
-                // Jab screen share stop ho jaye to wapas camera par aa jaye
-                videoTrack.onended = async () => {
-                    const camStream = await navigator.mediaDevices.getUserMedia({video: true});
-                    sender.replaceTrack(camStream.getVideoTracks()[0]);
-                };
             }
-        } catch (err) { console.error("Screen share cancel: " + err); }
+
+            document.getElementById('local-video').srcObject = screenStream;
+
+            videoTrack.onended = () => {
+                stopScreenShare();
+            };
+        } catch (err) {
+            console.error("Screen share error: " + err);
+        }
     }
 
-    function endCall() {
+    async function stopScreenShare() {
+        const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+        localStream = stream;
+        document.getElementById('local-video').srcObject = stream;
+        if (currentCall) {
+            let sender = currentCall.peerConnection.getSenders().find(s => s.track.kind === 'video');
+            sender.replaceTrack(stream.getVideoTracks()[0]);
+        }
+    }
+
+    // --- CALL CUT OPTION ---
+    function hangUp() {
         if (currentCall) currentCall.close();
+        if (conn) conn.close();
+        stopAllVideo();
+        addMessage("Call disconnected.", "received");
+    }
+
+    function stopAllVideo() {
         if (localStream) {
             localStream.getTracks().forEach(track => track.stop());
         }
-        document.getElementById('remote-video').srcObject = null;
         document.getElementById('local-video').srcObject = null;
-        cutBtn.style.display = "none";
-        addMessage("Call ended.", "received");
+        document.getElementById('remote-video').srcObject = null;
     }
 
+    // --- EXISTING CHAT LOGIC ---
     function setupChat() {
-        conn.on('data', data => addMessage(data, 'received'));
-        addMessage("Connected!", "received");
+        conn.on('data', (data) => {
+            addMessage(data, 'received');
+        });
+        addMessage("Friend connected!", "received");
     }
 
     function sendMsg() {
@@ -168,7 +197,8 @@
     }
 
     function copyInviteLink() {
-        const link = window.location.href.split('?')[0] + "?id=" + myIdDisplay.innerText;
+        const id = myIdDisplay.innerText;
+        const link = window.location.origin + window.location.pathname + "?id=" + id;
         navigator.clipboard.writeText(link);
         alert("Invite Link Copy Ho Gaya!");
     }
@@ -176,8 +206,19 @@
     function checkURLForID() {
         const urlParams = new URLSearchParams(window.location.search);
         const joinId = urlParams.get('id');
-        if(joinId) friendIdInput.value = joinId;
+        if(joinId) {
+            friendIdInput.value = joinId;
+        }
+    }
+
+    function toggleCamera() {
+        if(localStream) {
+            let videoTrack = localStream.getVideoTracks()[0];
+            videoTrack.enabled = !videoTrack.enabled;
+            document.getElementById('cam-btn').innerText = videoTrack.enabled ? "Camera Off" : "Camera On";
+        }
     }
 </script>
+
 </body>
 </html>
