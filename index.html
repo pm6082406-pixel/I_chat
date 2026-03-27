@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>I-CHAT Pro | Real-time Connect</title>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        :root { --primary: #0078ff; --secondary: #28a745; --bg: #f4f7f6; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        
+        header { background: var(--primary); color: white; padding: 15px; text-align: center; font-size: 22px; font-weight: bold; }
+
+        .connection-panel { background: white; padding: 15px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; border-bottom: 2px solid #ddd; }
+        .id-box { padding: 8px; background: #e3f2fd; border-radius: 5px; border: 1px dashed var(--primary); font-weight: bold; }
+
+        .main-layout { display: flex; flex: 1; overflow: hidden; padding: 10px; gap: 10px; }
+        
+        /* Left: Chat */
+        #chat-area { flex: 1; background: white; border-radius: 10px; display: flex; flex-direction: column; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #messages { flex: 1; padding: 15px; overflow-y: auto; background: #fafafa; }
+        .msg { margin-bottom: 10px; padding: 8px 12px; border-radius: 15px; max-width: 80%; width: fit-content; }
+        .sent { background: var(--primary); color: white; align-self: flex-end; margin-left: auto; }
+        .received { background: #eee; color: #333; }
+
+        /* Right: Video */
+        #video-area { flex: 1; background: #222; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+        video { width: 90%; border-radius: 8px; background: #000; margin: 5px; }
+        .controls { position: absolute; bottom: 20px; display: flex; gap: 10px; }
+
+        input, button { padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
+        button { cursor: pointer; border: none; font-weight: bold; transition: 0.3s; }
+        .btn-call { background: var(--secondary); color: white; }
+        .btn-copy { background: #6c757d; color: white; }
+    </style>
+</head>
+<body>
+
+<header>I-CHAT: Fast & Secure</header>
+
+<div class="connection-panel">
+    <div>Meri ID: <span id="my-id" class="id-box">Connecting...</span></div>
+    <button class="btn-copy" onclick="copyInviteLink()">🔗 Link Copy Karein</button>
+    <input type="text" id="friend-id" placeholder="Dost ki ID daalein">
+    <button class="btn-call" onclick="startCall()">📞 Call / Connect</button>
+</div>
+
+<div class="main-layout">
+    <section id="chat-area">
+        <div id="messages"></div>
+        <div style="padding: 10px; display: flex; gap: 5px; border-top: 1px solid #eee;">
+            <input type="text" id="msg-input" placeholder="Message likhein..." style="flex:1">
+            <button onclick="sendMsg()" style="background: var(--primary); color:white;">Bhejein</button>
+        </div>
+    </section>
+
+    <section id="video-area">
+        <video id="remote-video" autoplay playsinline></video>
+        <video id="local-video" autoplay muted playsinline style="width: 30%; position: absolute; top: 10px; right: 10px; border: 2px solid white;"></video>
+        <div class="controls">
+            <button onclick="toggleCamera()" id="cam-btn" style="background: orange;">Camera Off</button>
+        </div>
+    </section>
+</div>
+
+<script>
+    const myIdDisplay = document.getElementById('my-id');
+    const msgInput = document.getElementById('msg-input');
+    const messagesDiv = document.getElementById('messages');
+    const friendIdInput = document.getElementById('friend-id');
+
+    let peer = new Peer(); // PeerJS Object
+    let conn;
+    let localStream;
+
+    // 1. Peer ID Generate Karna
+    peer.on('open', (id) => {
+        myIdDisplay.innerText = id;
+        checkURLForID();
+    });
+
+    // 2. Chat Connection Receive Karna
+    peer.on('connection', (c) => {
+        conn = c;
+        setupChat();
+    });
+
+    // 3. Call Receive Karna
+    peer.on('call', async (call) => {
+        if(confirm("Dost ki call aa rahi hai, uthayein?")) {
+            const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+            localStream = stream;
+            document.getElementById('local-video').srcObject = stream;
+            call.answer(stream);
+            call.on('stream', (remoteStream) => {
+                document.getElementById('remote-video').srcObject = remoteStream;
+            });
+        }
+    });
+
+    // 4. Connect & Call Function
+    async function startCall() {
+        const friendId = friendIdInput.value;
+        if(!friendId) return alert("Pehle Dost ki ID daalein!");
+
+        // Setup Chat
+        conn = peer.connect(friendId);
+        setupChat();
+
+        // Setup Video
+        const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+        localStream = stream;
+        document.getElementById('local-video').srcObject = stream;
+        const call = peer.call(friendId, stream);
+        call.on('stream', (remoteStream) => {
+            document.getElementById('remote-video').srcObject = remoteStream;
+        });
+    }
+
+    // 5. Chat System
+    function setupChat() {
+        conn.on('data', (data) => {
+            addMessage(data, 'received');
+        });
+        addMessage("Connected to friend!", "received");
+    }
+
+    function sendMsg() {
+        const msg = msgInput.value;
+        if(conn && msg) {
+            conn.send(msg);
+            addMessage(msg, 'sent');
+            msgInput.value = "";
+        }
+    }
+
+    function addMessage(text, type) {
+        const div = document.createElement('div');
+        div.className = `msg ${type}`;
+        div.innerText = text;
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    // 6. Link Sharing Logic
+    function copyInviteLink() {
+        const id = myIdDisplay.innerText;
+        const link = window.location.href.split('?')[0] + "?id=" + id;
+        navigator.clipboard.writeText(link);
+        alert("Invite Link Copy Ho Gaya! Apne dost ko WhatsApp par bhej dein.");
+    }
+
+    function checkURLForID() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const joinId = urlParams.get('id');
+        if(joinId) {
+            friendIdInput.value = joinId;
+            alert("ID Auto-Fill ho gayi hai! Bas 'Call/Connect' dabayein.");
+        }
+    }
+
+    function toggleCamera() {
+        let videoTrack = localStream.getVideoTracks()[0];
+        videoTrack.enabled = !videoTrack.enabled;
+        document.getElementById('cam-btn').innerText = videoTrack.enabled ? "Camera Off" : "Camera On";
+    }
+</script>
+
+</body>
+</html>
